@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "clinical-triage-env"
+version = "1.0.0"
+description = "Multi-agent RL environment for Indian district hospital triage"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+keywords = [
+	"reinforcement-learning",
+	"openenv",
+	"multi-agent",
+	"healthcare",
+	"triage",
+	"india",
+	"hospital",
+]
+classifiers = [
+	"Programming Language :: Python :: 3.11",
+	"Topic :: Scientific/Engineering :: Artificial Intelligence",
+	"Intended Audience :: Science/Research",
+]
+dependencies = [
+	"openenv-core>=0.2.3",
+	"fastapi>=0.115.0",
+	"uvicorn>=0.30.0",
+	"pydantic>=2.0.0",
+	"httpx>=0.27.0",
+	"python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+	"pytest>=8.0.0",
+	"pytest-asyncio>=0.23.0",
+	"httpx>=0.27.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["clinical_triage_env*"]
+
+[project.scripts]
+triage-server = "server.app:app"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

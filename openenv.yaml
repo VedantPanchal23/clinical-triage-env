@@ -1,0 +1,69 @@
+name: clinical-triage-env
+version: "1.0.0"
+description: >
+  Multi-agent RL environment for Indian district hospital triage.
+  Agents act as triage nurses, specialist doctors, and resource
+  allocators to minimize patient deterioration under real-world
+  resource constraints.
+author: "Vedant"
+license: "MIT"
+
+environment:
+  class: TriageEnvironment
+  module: server.triage_environment
+  max_steps: 100
+  reset_on_done: true
+
+action:
+  class: TriageAction
+  module: models
+
+observation:
+  class: TriageObservation
+  module: models
+
+agents:
+  - name: triage_nurse
+    description: Assigns severity score (1-5) and routes patient to ward
+    action_fields: [assigned_severity, assigned_ward]
+  - name: specialist_doctor
+    description: Selects treatment protocol for assigned patient
+    action_fields: [treatment_protocol]
+  - name: resource_allocator
+    description: Assigns ICU beds, lab slots, and staff units
+    action_fields: [resource_action]
+
+grader:
+  programmatic:
+    module: server.mews_scorer
+    function: score_triage_decision
+    description: MEWS-based outcome scoring and SLA breach detection
+  llm:
+    module: server.llm_grader
+    function: grade_episode
+    model: claude-haiku-4-5-20251001
+    description: Medical justifiability scoring by LLM judge (0-10)
+
+rfc_compliance:
+  - rfc: "001"
+    description: "Baseline API - reset(), step(), state()"
+    status: implemented
+  - rfc: "002"
+    description: "Tool discoverability via observation feedback"
+    status: implemented
+  - rfc: "004"
+    description: "Delayed trajectory-level rewards at episode end"
+    status: implemented
+  - rfc: "005"
+    description: "Agentic harness - decision log for LLM grader"
+    status: implemented
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  module: server.app
+  app: app
+
+huggingface:
+  space_id: "openenv/clinical-triage-env"
+  sdk: docker

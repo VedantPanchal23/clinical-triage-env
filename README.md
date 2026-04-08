@@ -1,3 +1,13 @@
+---
+title: Clinical Triage Coordinator
+emoji: 🏥
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # Clinical Triage Coordinator
 > Multi-Agent RL Environment for Indian Public Hospitals
 

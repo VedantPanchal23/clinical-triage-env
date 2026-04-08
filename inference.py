@@ -35,35 +35,35 @@ TASKS = ["easy", "medium", "hard"]
 
 
 def log_start(task: str, env: str, model: str) -> None:
-    print(json.dumps({
-        "type": "START",
-        "task": task,
-        "env": env,
-        "model": model,
-    }), flush=True)
+    print(
+        f"[START] task={task} env={env} model={model}",
+        flush=True,
+    )
 
 
 def log_step(step: int, action: str, reward: float,
              done: bool, error=None) -> None:
-    print(json.dumps({
-        "type": "STEP",
-        "step": step,
-        "action": str(action),
-        "reward": round(float(reward), 4),
-        "done": bool(done),
-        "error": error,
-    }), flush=True)
+    error_str = str(error) if error else "null"
+    done_str = "true" if done else "false"
+    print(
+        f"[STEP] step={step} action={action} "
+        f"reward={round(float(reward), 4)} "
+        f"done={done_str} error={error_str}",
+        flush=True,
+    )
 
 
 def log_end(success: bool, steps: int,
             score: float, rewards: list) -> None:
-    print(json.dumps({
-        "type": "END",
-        "success": bool(success),
-        "steps": steps,
-        "score": round(float(score), 4),
-        "rewards": [round(float(r), 4) for r in rewards],
-    }), flush=True)
+    success_str = "true" if success else "false"
+    rewards_str = ",".join(str(round(float(r), 4)) for r in rewards)
+    print(
+        f"[END] score={round(float(score), 4)} "
+        f"steps={steps} "
+        f"success={success_str} "
+        f"rewards=[{rewards_str}]",
+        flush=True,
+    )
 
 
 def get_fallback_action(patient_queue: list) -> dict | None:

@@ -6,6 +6,7 @@ Environment variables:
   API_BASE_URL : LLM API base URL (default: https://api.groq.com/openai/v1)
   MODEL_NAME   : Model identifier (default: llama-3.1-8b-instant)
   HF_TOKEN     : API key for LLM provider (Groq key goes here)
+  LOCAL_IMAGE_NAME : Optional, only needed with from_docker_image()
   ENV_URL      : Running environment URL (default: http://localhost:8000)
 """
 
@@ -22,7 +23,8 @@ from openai import AsyncOpenAI
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
-HF_TOKEN = os.getenv("HF_TOKEN", "")
+HF_TOKEN = os.getenv("HF_TOKEN")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 ENV_URL = os.getenv("ENV_URL", "http://localhost:8000").rstrip("/")
 
 BENCHMARK = "clinical-triage-env"

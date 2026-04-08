@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import HTTPException
+from fastapi.responses import RedirectResponse
 from openenv.core.env_server import create_fastapi_app
 from pydantic import ValidationError
 import uvicorn
@@ -39,12 +40,19 @@ def _is_openenv_simulation_route(route) -> bool:
 		return True
 	if path == "/state" and "GET" in methods:
 		return True
+	if path == "/mcp" and "POST" in methods:
+		return True
 	return False
 
 
 app.router.routes = [
 	route for route in app.router.routes if not _is_openenv_simulation_route(route)
 ]
+
+
+@app.get("/", include_in_schema=False)
+async def root_redirect():
+	return RedirectResponse(url="/docs")
 
 
 @app.post("/reset")

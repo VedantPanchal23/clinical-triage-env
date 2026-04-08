@@ -11,9 +11,9 @@ pinned: false
 # Clinical Triage Coordinator
 > Multi-Agent RL Environment for Indian Public Hospitals
 
-🚀 **Live Demo:** https://vedantpanchal23-clinical-triage-env.hf.space/docs
-📦 **HuggingFace Space:** https://huggingface.co/spaces/VedantPanchal23/clinical-triage-env
-💻 **GitHub:** https://github.com/VedantPanchal23/clinical-triage-env
+**🚀Live Demo:** https://vedantpanchal23-clinical-triage-env.hf.space/docs
+**📦HuggingFace Space:** https://huggingface.co/spaces/VedantPanchal23/clinical-triage-env
+**💻GitHub:** https://github.com/VedantPanchal23/clinical-triage-env
 
 [![OpenEnv](https://img.shields.io/badge/OpenEnv-0.2.3-blue)](https://github.com/meta-pytorch/OpenEnv)
 [![Python](https://img.shields.io/badge/Python-3.11-green)](https://python.org)
@@ -141,7 +141,8 @@ docker run -p 8000:8000 clinical-triage-env
 
 ### Option 3: Use live HF Space
 
-Base URL: https://vedantpanchal23-clinical-triage-env.hf.space
+API Base URL: https://vedantpanchal23-clinical-triage-env.hf.space
+Interactive Docs: https://vedantpanchal23-clinical-triage-env.hf.space/docs
 
 ## API Endpoints
 
@@ -228,7 +229,3 @@ clinical_triage_env/
     ├── llm_grader.py
     └── requirements.txt
 ```
-
-## License
-
-MIT — Built for Meta PyTorch OpenEnv Hackathon x Scaler SST 2026

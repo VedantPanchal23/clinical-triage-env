@@ -39,6 +39,48 @@ from server.mews_scorer import (
 )
 
 
+TASKS = {
+    "easy": {
+        "name": "Basic Triage",
+        "description": (
+            "Correctly triage 5 patients by assigning severity scores "
+            "that match MEWS ground truth. All patients have clear-cut "
+            "vital signs. Succeed by achieving >= 0.7 average triage accuracy."
+        ),
+        "max_steps": 10,
+        "target_patients": 5,
+        "success_threshold": 0.7,
+        "difficulty": "easy",
+    },
+    "medium": {
+        "name": "Resource Constrained Triage",
+        "description": (
+            "Triage 10 patients while managing scarce resources: "
+            "only 2 ICU beds and 5 staff units. Correctly prioritize "
+            "critical patients for ICU. Succeed with zero patient deaths "
+            "and >= 0.6 stabilization rate."
+        ),
+        "max_steps": 30,
+        "target_patients": 10,
+        "success_threshold": 0.6,
+        "difficulty": "medium",
+    },
+    "hard": {
+        "name": "Mass Casualty Incident",
+        "description": (
+            "Handle a mass casualty scenario with 20 simultaneous patients "
+            "including multiple critical cases arriving continuously. "
+            "Minimize deaths under maximum resource pressure. "
+            "Succeed with >= 0.5 stabilization rate and < 2 deaths."
+        ),
+        "max_steps": 60,
+        "target_patients": 20,
+        "success_threshold": 0.5,
+        "difficulty": "hard",
+    },
+}
+
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -70,23 +112,41 @@ class TriageEnvironment(Environment):
         super().__init__()
         self._state = TriageState()
         self._queue: list[PatientState] = []
+        self._current_task = TASKS["medium"]
 
     # ------------------------------------------------------------------
     # OpenEnv API
     # ------------------------------------------------------------------
 
-    def reset(self) -> TriageObservation:
+    def reset(self, task: str = "default") -> TriageObservation:
         """Start a new episode with a fresh patient queue."""
+        task_config = TASKS.get(task)
+        if task_config is None:
+            # Backward-compatible default used by legacy clients and tests.
+            self._current_task = TASKS["medium"]
+            initial_queue_size = INITIAL_QUEUE_SIZE
+            max_steps = MAX_STEPS
+        else:
+            self._current_task = task_config
+            difficulty = self._current_task["difficulty"]
+            if difficulty == "hard":
+                initial_queue_size = 20
+            elif difficulty == "easy":
+                initial_queue_size = 5
+            else:
+                initial_queue_size = 10
+            max_steps = self._current_task["max_steps"]
+
         self._state = TriageState(
             episode_id=str(uuid.uuid4()),
             step_count=0,
-            max_steps=MAX_STEPS,
+            max_steps=max_steps,
             icu_beds_available=ICU_BEDS_TOTAL,
             general_beds_available=GENERAL_BEDS_TOTAL,
             staff_units_free=STAFF_UNITS_TOTAL,
             lab_queue_length=0,
         )
-        self._queue = generate_initial_queue(INITIAL_QUEUE_SIZE)
+        self._queue = generate_initial_queue(initial_queue_size)
 
         return self._build_observation(
             last_patient_id="RESET",
@@ -94,6 +154,10 @@ class TriageEnvironment(Environment):
             feedback="Episode started. Triage coordinator active.",
             step_reward=0.0,
         )
+
+    def reset_default(self) -> TriageObservation:
+        """Legacy default reset used by /reset endpoint for compatibility tests."""
+        return self.reset(task="default")
 
     def step(self, action: TriageAction) -> TriageObservation:
         """
@@ -120,7 +184,7 @@ class TriageEnvironment(Environment):
                 last_patient_id=action.patient_id,
                 valid=False,
                 feedback=f"Patient {action.patient_id} not found in queue.",
-                step_reward=-0.5,
+                step_reward=self._normalize_reward(-0.5),
             )
 
         # --- 2. Triage nurse: severity + ward ---
@@ -182,11 +246,13 @@ class TriageEnvironment(Environment):
             self._state.trajectory_reward = trajectory_reward
             step_reward += trajectory_reward
 
+        step_reward = self._normalize_reward(step_reward)
+
         obs = self._build_observation(
             last_patient_id=action.patient_id,
             valid=True,
             feedback=" | ".join(feedback_parts),
-            step_reward=round(step_reward, 3),
+            step_reward=step_reward,
         )
         obs.episode_done = done
         return obs
@@ -377,11 +443,22 @@ class TriageEnvironment(Environment):
 
     def _check_done(self) -> bool:
         """Episode ends when max steps reached or queue is empty."""
-        if self._state.step_count >= MAX_STEPS:
+        if self._state.step_count >= self._state.max_steps:
             return True
         if len(self._queue) == 0:
             return True
         return False
+
+    def _normalize_reward(self, raw_reward: float) -> float:
+        """
+        Normalize raw step reward to 0.0-1.0 range.
+        Raw step rewards range from about -3.0 to +3.5
+        We shift and scale to 0.0-1.0
+        """
+        MIN_RAW = -3.0
+        MAX_RAW = 3.5
+        normalized = (raw_reward - MIN_RAW) / (MAX_RAW - MIN_RAW)
+        return round(max(0.0, min(1.0, normalized)), 3)
 
     def _compute_trajectory_reward(self) -> float:
         """
@@ -411,7 +488,49 @@ class TriageEnvironment(Environment):
         if icu_used >= 1:
             reward += 1.0
 
-        return round(reward, 2)
+        MIN_TRAJ = -50.0
+        MAX_TRAJ = 50.0
+        normalized = (reward - MIN_TRAJ) / (MAX_TRAJ - MIN_TRAJ)
+        return round(max(0.0, min(1.0, normalized)), 3)
+
+    def grade_task(self) -> dict:
+        s = self._state
+        task = self._current_task
+        total = s.patients_stabilized + s.patients_deteriorated + s.patients_deceased
+        if total == 0:
+            return {"score": 0.0, "success": False, "reason": "No patients treated"}
+
+        stabilization_rate = s.patients_stabilized / max(total, 1)
+        death_penalty = s.patients_deceased * 0.15
+        overflow_penalty = s.queue_overflow_count * 0.05
+        raw_score = stabilization_rate - death_penalty - overflow_penalty
+        score = round(max(0.0, min(1.0, raw_score)), 3)
+
+        if task["difficulty"] == "easy":
+            success = score >= task["success_threshold"]
+        elif task["difficulty"] == "medium":
+            success = (
+                score >= task["success_threshold"]
+                and s.patients_deceased == 0
+            )
+        else:  # hard
+            success = (
+                score >= task["success_threshold"]
+                and s.patients_deceased < 2
+            )
+
+        return {
+            "task_name": task["name"],
+            "difficulty": task["difficulty"],
+            "score": score,
+            "success": success,
+            "patients_stabilized": s.patients_stabilized,
+            "patients_deteriorated": s.patients_deteriorated,
+            "patients_deceased": s.patients_deceased,
+            "stabilization_rate": round(stabilization_rate, 3),
+            "steps_taken": s.step_count,
+            "reason": f"Stabilized {s.patients_stabilized}/{total} patients",
+        }
 
     def _build_observation(
         self,

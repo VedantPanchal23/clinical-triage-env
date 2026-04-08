@@ -8,6 +8,25 @@ description: >
 author: "Vedant"
 license: "MIT"
 
+tasks:
+  - name: easy
+    description: "Basic triage of 5 patients, MEWS-guided severity assignment"
+    difficulty: easy
+    max_steps: 10
+    success_threshold: 0.7
+  - name: medium
+    description: "Resource-constrained triage of 10 patients, zero deaths required"
+    difficulty: medium
+    max_steps: 30
+    success_threshold: 0.6
+  - name: hard
+    description: "Mass casualty incident, 20 patients, maximum resource pressure"
+    difficulty: hard
+    max_steps: 60
+    success_threshold: 0.5
+
+entry_point: "uvicorn server.app:app --host 0.0.0.0 --port 8000"
+
 environment:
   class: TriageEnvironment
   module: server.triage_environment

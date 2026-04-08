@@ -1,5 +1,7 @@
 # Clinical Triage Coordinator
 
+🚀 **Live Demo:** https://vedantpanchal23-clinical-triage-env.hf.space/docs
+
 > Multi-Agent RL Environment for Indian Public Hospitals
 > Built on [OpenEnv](https://github.com/meta-pytorch/OpenEnv)
 > by Meta-PyTorch
@@ -186,7 +188,3 @@ clinical_triage_env/
 - India-specific framing (district hospital constraints, MEWS scoring) resonates with the hackathon's India focus
 - Universally legible objective - judges immediately understand "minimize patient deterioration"
 - Deepest RFC alignment of any healthcare environment evaluated (RFC 001, 002, 004, 005)
-
-## License
-
-MIT

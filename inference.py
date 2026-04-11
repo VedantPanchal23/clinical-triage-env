@@ -244,17 +244,17 @@ async def run_task(
         try:
             gr    = await http.post(f"{ENV_URL}/grade", timeout=10.0)
             gdata = gr.json()
-            score = float(gdata.get("score", 0.0))
+            score = float(gdata.get("score", 0.01))
         except Exception:
             score = (
-                sum(rewards) / MAX_TOTAL_REWARD if rewards else 0.0
+                sum(rewards) / MAX_TOTAL_REWARD if rewards else 0.01
             )
-        score   = max(0.0, min(1.0, score))
+        score   = max(0.01, min(0.99, score))
         success = score >= SUCCESS_THRESHOLD
 
     except Exception as e:
         print(f"[DEBUG] Task {task_name} error: {e}", flush=True)
-        score   = 0.0
+        score   = 0.01
         success = False
 
     log_end(success=success, steps=steps_taken,

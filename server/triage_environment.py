@@ -532,7 +532,7 @@ class TriageEnvironment(Environment):
         MIN_RAW = -3.0
         MAX_RAW = 3.5
         normalized = (raw_reward - MIN_RAW) / (MAX_RAW - MIN_RAW)
-        return round(max(0.0, min(1.0, normalized)), 3)
+        return round(max(0.01, min(0.99, normalized)), 3)
 
     def _compute_trajectory_reward(self) -> float:
         """
@@ -565,7 +565,7 @@ class TriageEnvironment(Environment):
         MIN_TRAJ = -50.0
         MAX_TRAJ = 50.0
         normalized = (reward - MIN_TRAJ) / (MAX_TRAJ - MIN_TRAJ)
-        return round(max(0.0, min(1.0, normalized)), 3)
+        return round(max(0.01, min(0.99, normalized)), 3)
 
     def grade_task(self) -> dict:
         s = self._state
@@ -585,9 +585,9 @@ class TriageEnvironment(Environment):
                 avg_step = sum(
                     e.get("step_reward", 0) for e in s.decision_log
                 ) / len(s.decision_log)
-                score = round(max(0.0, min(1.0, avg_step)), 3)
+                score = round(max(0.01, min(0.99, avg_step)), 3)
             else:
-                score = 0.0
+                score = 0.01
             return {
                 "task_name": task["name"],
                 "difficulty": difficulty,
@@ -615,7 +615,7 @@ class TriageEnvironment(Environment):
             # Blend: 60% outcome-based + 40% step-reward-based
             raw_score = 0.6 * raw_score + 0.4 * avg_step_reward
 
-        score = round(max(0.0, min(1.0, raw_score)), 3)
+        score = round(max(0.01, min(0.99, raw_score)), 3)
 
         if difficulty == "medium" and deceased > 0:
             score = min(score, 0.5)

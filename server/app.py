@@ -202,13 +202,20 @@ async def list_tasks():
 
 @app.post("/grade")
 async def grade_current_episode():
-	return env.grade_task()
+	result = env.grade_task()
+	# Ensure score is strictly between 0 and 1.
+	if "score" in result:
+		result["score"] = round(max(0.01, min(0.99, float(result["score"]))), 4)
+	return result
 
 
 @app.get("/grade/{task_name}")
 async def grade_task_by_name(task_name: str):
 	"""Grade the current episode for a specific task difficulty."""
 	result = env.grade_task()
+	# Ensure score is strictly between 0 and 1.
+	if "score" in result:
+		result["score"] = round(max(0.01, min(0.99, float(result["score"]))), 4)
 	result["requested_task"] = task_name
 	return result
 

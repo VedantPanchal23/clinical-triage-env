@@ -163,6 +163,7 @@ class TriageObservation(BaseModel):
 
     # Step-level reward breakdown (for transparency)
     step_reward: float
+    reward_breakdown: dict = {}
 
     # Episode progress
     step_count: int

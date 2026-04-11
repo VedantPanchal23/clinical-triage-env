@@ -28,6 +28,15 @@ short_description: Multi-agent RL environment for Indian hospital triage
 [![Docker](https://img.shields.io/badge/Docker-ready-blue)](https://docker.com)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
+## 🎮 Try it live
+**Interactive Dashboard:** https://vedantpanchal23-clinical-triage-env.hf.space/web
+
+Click Reset -> Auto Step to watch agents triage patients in real-time.
+
+## 📡 API
+**Base URL:** https://vedantpanchal23-clinical-triage-env.hf.space
+**Docs:** https://vedantpanchal23-clinical-triage-env.hf.space/docs
+
 ---
 
 ## Overview
@@ -214,13 +223,13 @@ Expected output format:
 
 ## Baseline Scores
 
-| Task   | Difficulty | Score | Steps | Success |
-|--------|------------|-------|-------|---------|
-| easy   | Easy       | 1.000 | 6     | true    |
-| medium | Medium     | 1.000 | 15    | true    |
-| hard   | Hard       | 1.000 | 15    | true    |
+| Task   | Score | Steps | Success | Notes |
+|--------|-------|-------|---------|-------|
+| easy   | 0.99  | 6     | true    | Completes in 6 steps |
+| medium | 0.99  | 15    | true    | Resource-constrained |
+| hard   | 0.306 | 15    | false   | Mass casualty pressure |
 
-Scores obtained with seed=42, MODEL=llama-3.1-8b-instant
+Scores obtained with seed=42, MODEL=llama-3.1-8b-instant, fallback mode
 
 ## Environment Design
 

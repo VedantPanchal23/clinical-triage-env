@@ -166,6 +166,7 @@ class TriageEnvironment(Environment):
             self._hard_mode = False
 
         self._queue = generate_initial_queue(initial_queue_size)
+        self._last_reward_breakdown = {}
         self._last_info = self._build_info(
             "RESET",
             "Episode started. Triage coordinator active.",
@@ -198,18 +199,31 @@ class TriageEnvironment(Environment):
         """
         self._state.step_count += 1
         step_reward = 0.0
+        triage_reward = 0.0
+        treatment_reward = 0.0
+        resource_reward = 0.0
+        sla_breach = False
         feedback_parts = []
 
         # --- 1. Find patient ---
         patient = self._find_patient(action.patient_id)
         if patient is None:
             invalid_feedback = f"Patient {action.patient_id} not found in queue."
+            invalid_normalized = self._normalize_reward(-0.5)
+            self._last_reward_breakdown = {
+                "triage_component": 0.0,
+                "treatment_component": 0.0,
+                "resource_component": 0.0,
+                "sla_penalty": 0.0,
+                "total_raw": -0.5,
+                "normalized": round(invalid_normalized, 3),
+            }
             self._last_info = self._build_info(action.patient_id, invalid_feedback)
             return self._build_observation(
                 last_patient_id=action.patient_id,
                 valid=False,
                 feedback=invalid_feedback,
-                step_reward=self._normalize_reward(-0.5),
+                step_reward=invalid_normalized,
             )
 
         # --- 2. Triage nurse: severity + ward ---
@@ -242,6 +256,7 @@ class TriageEnvironment(Environment):
 
         # --- 5. SLA breach check ---
         if check_sla_breach(patient.true_severity, patient.time_in_queue):
+            sla_breach = True
             step_reward -= 0.3
             feedback_parts.append(
                 f"SLA breach: {patient.patient_id} waited {patient.time_in_queue} steps"
@@ -271,7 +286,18 @@ class TriageEnvironment(Environment):
             self._state.trajectory_reward = trajectory_reward
             step_reward += trajectory_reward
 
+        raw_step_reward = step_reward
         step_reward = self._normalize_reward(step_reward)
+        self._last_reward_breakdown = {
+            "triage_component": round(triage_reward, 3),
+            "treatment_component": round(
+                treatment_reward if action.treatment_protocol else 0.0, 3
+            ),
+            "resource_component": round(resource_reward, 3),
+            "sla_penalty": round(-0.3 if sla_breach else 0.0, 3),
+            "total_raw": round(raw_step_reward, 3),
+            "normalized": round(step_reward, 3),
+        }
 
         feedback = " | ".join(feedback_parts)
         self._last_info = self._build_info(action.patient_id, feedback)
@@ -666,6 +692,7 @@ class TriageEnvironment(Environment):
             last_action_valid=valid,
             last_action_feedback=feedback,
             step_reward=step_reward,
+            reward_breakdown=getattr(self, "_last_reward_breakdown", {}),
             step_count=s.step_count,
             patients_stabilized=s.patients_stabilized,
             patients_deteriorated=s.patients_deteriorated,

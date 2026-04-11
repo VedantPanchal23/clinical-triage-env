@@ -4,6 +4,7 @@ emoji: 🏥
 colorFrom: red
 colorTo: blue
 sdk: docker
+app_port: 7860
 pinned: false
 tags:
     - openenv
@@ -136,15 +137,17 @@ cd clinical-triage-env
 python -m venv venv
 venv\Scripts\activate
 pip install -r server/requirements.txt
-python -m uvicorn server.app:app --host 0.0.0.0 --port 8000
+python -m uvicorn server.app:app --host 0.0.0.0 --port 7860
 ```
 
 ### Option 2: Docker
 
 ```bash
 docker build -t clinical-triage-env .
-docker run -p 8000:8000 clinical-triage-env
+docker run -p 7860:7860 clinical-triage-env
 ```
+
+HF Space runs on port 7860. Local development can use any port.
 
 ### Option 3: Use live HF Space
 

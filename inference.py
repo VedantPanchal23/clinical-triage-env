@@ -8,7 +8,7 @@ Environment variables:
   API_BASE_URL   : LLM endpoint (default: https://api.groq.com/openai/v1)
   MODEL_NAME     : Model name (default: llama-3.1-8b-instant)
   HF_TOKEN       : Alternative name for API key (fallback)
-  ENV_URL        : Running server URL (default: http://localhost:8000)
+    ENV_URL        : Running server URL (default: http://localhost:7860)
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ OPENAI_API_KEY = (
 )
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
 MODEL_NAME   = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
-ENV_URL      = os.getenv("ENV_URL", "http://localhost:8000").rstrip("/")
+ENV_URL      = os.getenv("ENV_URL", "http://localhost:7860").rstrip("/")
 
 BENCHMARK             = "clinical-triage-env"
 MAX_STEPS             = 15

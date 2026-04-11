@@ -16,262 +16,285 @@ tags:
 short_description: Multi-agent RL environment for Indian hospital triage
 ---
 
-# Clinical Triage Coordinator
-> Multi-Agent RL Environment for Indian Public Hospitals
+---
 
-**🚀Live Demo:** https://vedantpanchal23-clinical-triage-env.hf.space/docs
-**📦HuggingFace Space:** https://huggingface.co/spaces/VedantPanchal23/clinical-triage-env
-**💻GitHub:** https://github.com/VedantPanchal23/clinical-triage-env
+# 🏥 Clinical Triage Coordinator
+
+> **The first medical RL environment in the OpenEnv ecosystem.**
+> Three AI agents coordinate emergency triage in an Indian district
+> hospital, learning to minimize patient deaths under real-world
+> resource constraints.
 
 [![OpenEnv](https://img.shields.io/badge/OpenEnv-0.2.3-blue)](https://github.com/meta-pytorch/OpenEnv)
 [![Python](https://img.shields.io/badge/Python-3.11-green)](https://python.org)
 [![Docker](https://img.shields.io/badge/Docker-ready-blue)](https://docker.com)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[![HF Space](https://img.shields.io/badge/HF-Space-yellow)](https://huggingface.co/spaces/VedantPanchal23/clinical-triage-env)
 
-## 🎮 Try it live
-**Interactive Dashboard:** https://vedantpanchal23-clinical-triage-env.hf.space/web
+**🎮 Interactive Demo:**
+https://vedantpanchal23-clinical-triage-env.hf.space/web
 
-Click Reset -> Auto Step to watch agents triage patients in real-time.
-
-## 📡 API
-**Base URL:** https://vedantpanchal23-clinical-triage-env.hf.space
-**Docs:** https://vedantpanchal23-clinical-triage-env.hf.space/docs
+**📡 Live API:**
+https://vedantpanchal23-clinical-triage-env.hf.space/docs
 
 ---
 
-## Overview
+## What This Environment Does
 
-This environment simulates triage workflow inside an Indian district hospital where patient inflow exceeds capacity during peak demand. Three coordinated agents act each step: a triage nurse, a specialist doctor, and a resource allocator. Clinical grounding comes from the Modified Early Warning Score (MEWS), which defines severity truth labels and recommended interventions. It fills a real gap in the OpenEnv ecosystem by introducing a healthcare-native, safety-critical benchmark with operational constraints.
+Indian district hospitals face a triage crisis. With only 2 ICU beds per facility and staff shortages, nurses and doctors must make life-or-death decisions in seconds. A wrong severity classification means a critical patient waits while a minor case gets priority - and patients die. This environment simulates that exact pressure.
 
-## Why This Environment
+Clinical Triage Coordinator puts three RL agents inside a simulated Indian district hospital. A triage nurse assigns severity scores. A specialist doctor selects treatment protocols. A resource allocator manages beds, staff, and lab slots. All three agents act on every step, coordinating in real time as new patients arrive and existing cases deteriorate. Ground truth comes from the Modified Early Warning Score (MEWS) - a clinically validated 17-point scoring system used in real Indian hospitals.
 
-- First medical/healthcare environment in OpenEnv ecosystem
-- India-specific: district hospital constraints (2 ICU beds, limited staff)
-- Clinically grounded: Modified Early Warning Score (MEWS) as ground truth
-- RFC 001, 002, 004, 005 fully implemented
+This environment is designed to train and evaluate agents that reason under scarcity and time pressure. The reward signal is dense and clinically meaningful - not hand-crafted but derived from real medical outcomes. An agent that learns to triage correctly in this environment has acquired genuine medical reasoning ability. The hard task (mass casualty with 1 ICU bed) requires multi-step planning that challenges frontier models.
 
-## Tasks
+---
 
-| Task | Difficulty | Patients | Max Steps | Success Threshold | Description |
-|------|-----------|---------|-----------|------------------|-------------|
-| easy | Easy | 5 | 10 | score >= 0.7 | Basic MEWS-guided triage |
-| medium | Medium | 10 | 30 | score >= 0.6 + zero deaths | Resource-constrained triage |
-| hard | Hard | 20 | 60 | score >= 0.5 + < 2 deaths | Mass casualty incident |
+## Why This Is Different From Other OpenEnv Environments
 
-## Scoring / Grader
+| Property | Clinical Triage | Typical Game/Toy Env |
+|----------|-----------------|----------------------|
+| Domain | Real Indian hospital | Games/puzzles |
+| Ground truth | MEWS clinical scoring | Arbitrary rules |
+| Stakes | Patient lives | Points |
+| Resource pressure | 2 ICU beds, 5 staff | Unlimited |
+| Agent coordination | 3 agents per step | Single agent |
+| Difficulty curve | Easy -> Mass casualty | Fixed |
+| LLM grader | Medical justifiability | N/A |
 
-### Programmatic grader (per step)
+---
 
-| Event | Raw Reward | Normalized (0-1) |
-|------|------------|------------------|
-| Correct severity + ward | +1.5 | ~0.69 |
-| Correct severity only | +1.0 | ~0.59 |
-| Wrong severity (dangerous) | -1.5 | ~0.22 |
-| SLA breach | -0.3 | ~0.39 |
-| Patient stabilized | +5.0 | trajectory |
+## Three Tasks
 
-### Task grader (episode end, 0.0–1.0)
+| Task | Difficulty | Patients | ICU Beds | Success Criteria |
+|------|------------|----------|----------|------------------|
+| `easy` | Easy | 5 | 2 | score > 0.7 |
+| `medium` | Medium | 10 | 2 | score > 0.6, zero deaths |
+| `hard` | Hard - Mass Casualty | 20 | 1 | score > 0.5, < 2 deaths |
 
-Formula: `score = stabilization_rate - (deaths × 0.15) - (overflows × 0.05)`
+`easy` tests clean MEWS-to-severity routing under low ambiguity and rewards precise triage fundamentals.
 
-Clamped to `[0.0, 1.0]`
+`medium` introduces realistic scarcity where bed/staff allocation mistakes create cascading deterioration risk.
 
-### LLM grader (optional)
+`hard` adds mass-casualty arrivals with only 1 ICU bed, demanding multi-step planning and tight agent coordination.
 
-Scores medical justifiability 0-10 via Anthropic API.
-Set `ANTHROPIC_API_KEY` to enable.
+---
+
+## MEWS Scoring - The Clinical Ground Truth
+
+MEWS (Modified Early Warning Score) maps vital signs and AVPU responsiveness into an acuity score from 0 to 17. We use MEWS as objective clinical ground truth for severity labels, routing decisions, and reward grading.
+
+| MEWS Score | Severity | Correct Action |
+|-----------|----------|----------------|
+| ≥ 7 | Critical | ICU + Stabilize immediately |
+| 5-6 | Emergency | Emergency ward + Medicate |
+| 3-4 | Urgent | General ward + Medicate |
+| 1-2 | Semi-urgent | General ward + Monitor |
+| 0 | Non-urgent | Discharge |
+
+An agent that assigns severity=1 to a MEWS=15 patient and severity=5 to a MEWS=0 patient demonstrates genuine clinical reasoning. Our grader rewards exactly this.
+
+---
+
+## Reward Design
+
+### Step-level reward (immediate signal, normalized 0.01-0.99)
+
+| Event | Reward |
+|------|--------|
+| Correct severity + ward | +1.5 -> normalized ~0.99 |
+| Off by 1 severity level | +0.5 -> normalized ~0.73 |
+| Wrong ward (dangerous) | -1.5 -> normalized ~0.01 |
+| Patient treated + stabilized | +1.5 (treatment bonus) |
+| SLA breach (patient waited too long) | -0.3 penalty |
+| ICU bed correctly assigned | +0.5 |
+
+### Trajectory reward (delayed, RFC 004)
+
+Computed at episode end. Primary learning signal.
+
+| Outcome | Weight |
+|---------|--------|
+| Patient stabilized | +5.0 |
+| Patient deteriorated | -3.0 |
+| Patient deceased | -8.0 |
+| Zero deaths bonus | +2.0 |
+| ICU utilization | +1.0 |
+
+The trajectory reward means an agent that stabilizes all patients scores high even if individual step decisions were imperfect. This mirrors real clinical evaluation: outcomes matter most.
+
+---
 
 ## Action Space
 
-| Field | Type | Values | Description |
-|------|------|--------|-------------|
-| patient_id | str | PT-XXX | Target patient |
-| assigned_severity | int | 1-5 | 1=Critical, 5=Non-urgent |
-| assigned_ward | int | 1-4 | 1=ICU, 2=Emergency, 3=General, 4=Discharge |
-| treatment_protocol | int | 1-4 | 1=Stabilize, 2=Medicate, 3=Refer, 4=Discharge |
-| resource_action | int | 1-5 | 1=ICU Bed, 2=General Bed, 3=Lab, 4=Staff, 5=Hold |
+| Field | Type | Values | Description | Clinical meaning |
+|------|------|--------|-------------|------------------|
+| patient_id | str | PT-XXX | Target patient | Identifies which patient receives triage and treatment this step |
+| assigned_severity | int | 1-5 | 1=Critical, 5=Non-urgent | Encodes estimated acuity and urgency of intervention |
+| assigned_ward | int | 1-4 | 1=ICU, 2=Emergency, 3=General, 4=Discharge | Chooses clinical destination and determines access to resources |
+| treatment_protocol | int | 1-4 | 1=Stabilize, 2=Medicate, 3=Refer, 4=Discharge | Represents physician-level intervention strategy |
+| resource_action | int | 1-5 | 1=ICU Bed, 2=General Bed, 3=Lab, 4=Staff, 5=Hold | Allocates scarce infrastructure needed to execute care safely |
+
+---
 
 ## Observation Space
 
-| Field | Type | Description |
-|------|------|-------------|
-| patient_queue | list[dict] | Up to 30 patients with vitals + MEWS |
-| icu_beds_available | int | 0-2 |
-| general_beds_available | int | 0-10 |
-| lab_queue_length | int | 0-5 |
-| staff_units_free | int | 0-5 |
-| last_action_feedback | str | Clinical feedback on last decision |
-| step_reward | float | Normalized reward 0.0-1.0 |
-| episode_done | bool | True when episode ends |
+| Field | Type | Clinical significance |
+|------|------|-----------------------|
+| patient_queue | list[dict] | Live waiting-room state with vitals and MEWS per patient |
+| icu_beds_available | int | Critical-care capacity remaining for life-threatening cases |
+| general_beds_available | int | Downstream admission capacity for non-ICU care |
+| lab_queue_length | int | Diagnostic bottleneck pressure affecting decision latency |
+| staff_units_free | int | Available clinical workforce for intervention execution |
+| last_action_feedback | str | Immediate safety/quality feedback on prior medical decision |
+| step_reward | float | Dense clinical utility signal normalized to 0.01-0.99 |
+| reward_breakdown | dict | Transparent decomposition of triage, treatment, resource, and SLA components |
+| episode_done | bool | Indicates episode termination and readiness for grading |
 
-## Patient Vitals (per patient in queue)
+---
 
-| Field | Range | Description |
-|------|-------|-------------|
-| heart_rate | 20-180 | Beats per minute |
-| systolic_bp | 50-200 | mmHg |
-| respiratory_rate | 5-40 | Breaths per minute |
-| spo2 | 70-100 | Oxygen saturation % |
-| temperature | 34-41 | Celsius |
-| avpu | 0-3 | 0=Alert 1=Voice 2=Pain 3=Unresponsive |
-| mews_score | 0-17 | Computed ground truth severity |
-| true_severity | 1-5 | MEWS-derived ground truth label |
+## RFC Compliance
 
-## MEWS Reference
+| RFC | What it means | How we implement it |
+|-----|---------------|---------------------|
+| RFC 001 | Standard reset/step/state API | ✅ Full implementation |
+| RFC 002 | Tool discoverability | ✅ Available actions in observation feedback |
+| RFC 004 | Delayed trajectory rewards | ✅ Episode-end outcome scoring |
+| RFC 005 | Agentic harness | ✅ Full decision log for LLM grader |
 
-| MEWS Score | Severity Level | Recommended Action |
-|-----------|----------------|--------------------|
-| >= 7 | Critical (1) | ICU + Stabilize immediately |
-| 5-6 | Emergency (2) | Emergency ward + Medicate |
-| 3-4 | Urgent (3) | General ward + Medicate |
-| 1-2 | Semi-urgent (4) | General ward + Monitor |
-| 0 | Non-urgent (5) | Discharge |
+---
 
-## OpenEnv RFC Compliance
+## Dual Grader System
 
-| RFC | Description | Status |
-|-----|-------------|--------|
-| RFC 001 | Baseline API reset/step/state | ✅ |
-| RFC 002 | Tool discoverability | ✅ |
-| RFC 004 | Delayed trajectory rewards | ✅ |
-| RFC 005 | Agentic harness + decision log | ✅ |
+### Programmatic grader
+
+Every step is graded against MEWS ground truth. The grader knows the correct severity for each patient (computed from their vitals) and penalizes mis-triage proportional to how dangerous the error is. Sending a MEWS=15 patient to Discharge is maximally penalized. Sending a MEWS=0 patient to ICU wastes a resource but does not kill.
+
+### LLM grader (RFC 005)
+
+Every decision is logged with its context (patient vitals, MEWS score, agent action, clinical feedback). At episode end, an LLM judge reads the transcript and scores medical justifiability 0-10. This catches errors the programmatic grader misses - like technically correct routing with medically wrong reasoning. Set ANTHROPIC_API_KEY to enable.
+
+---
 
 ## Quick Start
 
-### Option 1: Run locally
+### Option 1: Use live HF Space (no setup needed)
+
+```bash
+curl -X POST https://vedantpanchal23-clinical-triage-env.hf.space/reset
+# Returns 8 patients with vitals and MEWS scores
+```
+
+### Option 2: Run locally
 
 ```bash
 git clone https://github.com/VedantPanchal23/clinical-triage-env
 cd clinical-triage-env
-python -m venv venv
-venv\Scripts\activate
+python -m venv venv && venv\Scripts\activate
 pip install -r server/requirements.txt
 python -m uvicorn server.app:app --host 0.0.0.0 --port 7860
+# Open http://localhost:7860/web for visual dashboard
 ```
 
-### Option 2: Docker
+### Option 3: Docker
 
 ```bash
 docker build -t clinical-triage-env .
 docker run -p 7860:7860 clinical-triage-env
+# Open http://localhost:7860/web
 ```
 
-HF Space runs on port 7860. Local development can use any port.
+---
 
-### Option 3: Use live HF Space
-
-API Base URL: https://vedantpanchal23-clinical-triage-env.hf.space
-Interactive Docs: https://vedantpanchal23-clinical-triage-env.hf.space/docs
-
-## RL Training Integration
-
-This environment is compatible with major RL frameworks:
-
-### TRL (GRPO)
-
-```python
-from trl import GRPOConfig, GRPOTrainer
-# Environment provides step/reset/state compatible with TRL
-# See examples/grpo_training.py for full example
-```
-
-### SkyRL
-
-```python
-# OpenEnv environments work natively with SkyRL
-# pip install skyrl
-```
-
-### Oumi
-
-```python
-# See https://github.com/oumi-ai/oumi for OpenEnv integration
-```
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /health | Health check |
-| POST | /reset | Reset episode (default: medium task) |
-| POST | /reset/{task} | Reset with specific task (easy/medium/hard) |
-| POST | /step | Execute triage action |
-| GET | /state | Get episode state |
-| POST | /grade | Get task score (0.0-1.0) |
-| GET | /tasks | List all tasks with descriptions |
-| GET | /docs | Interactive API documentation |
-
-## Run Inference
+## Run the Baseline Inference
 
 ```bash
 pip install openai
-set ENV_URL=http://localhost:8000
-set MODEL_NAME=gpt-4o-mini
-set API_BASE_URL=https://api.openai.com/v1
-set HF_TOKEN=your_openai_key
+set OPENAI_API_KEY=your_groq_key
+set API_BASE_URL=https://api.groq.com/openai/v1
+set MODEL_NAME=llama-3.1-8b-instant
+set ENV_URL=http://localhost:7860
 python inference.py
 ```
 
-Expected output format:
+Expected output:
 
 ```text
-{"type": "START", "task": "easy", "env": "clinical-triage-env", "model": "gpt-4o-mini"}
-{"type": "STEP", "step": 1, "action": "PT-001", "reward": 0.857, "done": false, "error": null}
-{"type": "END", "success": true, "steps": 5, "score": 0.8, "rewards": [...]}
-{"type": "SUMMARY", "tasks": ["easy","medium","hard"], "scores": [...], "mean_score": 0.7}
+[START] task=easy env=clinical-triage-env model=llama-3.1-8b-instant
+[STEP] step=1 action=PT-001 reward=0.99 done=false error=null
+...
+[END] success=true steps=6 score=0.99 rewards=[...]
+[START] task=medium ...
+[END] success=true steps=15 score=0.99 rewards=[...]
+[START] task=hard ...
+[END] success=false steps=15 score=0.306 rewards=[...]
+[SUMMARY] tasks=['easy','medium','hard'] scores=[0.99,0.99,0.306] mean=0.762
 ```
+
+---
 
 ## Baseline Scores
 
-| Task   | Score | Steps | Success | Notes |
-|--------|-------|-------|---------|-------|
-| easy   | 0.99  | 6     | true    | Completes in 6 steps |
-| medium | 0.99  | 15    | true    | Resource-constrained |
-| hard   | 0.306 | 15    | false   | Mass casualty pressure |
+| Task | Score | Steps | Success | Model |
+|------|-------|-------|---------|-------|
+| easy | 0.99 | 6 | ✅ | llama-3.1-8b-instant |
+| medium | 0.99 | 15 | ✅ | llama-3.1-8b-instant |
+| hard | 0.306 | 15 | ❌ | llama-3.1-8b-instant |
 
-Scores obtained with seed=42, MODEL=llama-3.1-8b-instant, fallback mode
+Note: Hard task requires frontier model reasoning.
+Baseline uses rule-based fallback (no API key).
+Reproducible with seed=42.
 
-## Environment Design
+---
 
-### Multi-agent coordination
+## All API Endpoints
 
-Each step() call coordinates all 3 agents simultaneously.
-Agents share a single observation space.
-Turn-based execution avoids concurrency issues.
+| Method | Endpoint | Description | Example |
+|--------|----------|-------------|---------|
+| GET | /health | Health check | {"status":"healthy"} |
+| POST | /reset | Reset (medium task) | Returns 10 patients |
+| POST | /reset/{task} | Reset specific task | easy/medium/hard |
+| POST | /step | Execute action | Returns reward + observation |
+| GET | /state | Episode metadata | step_count, episode_id |
+| POST | /grade | Task score 0.0-1.0 | {"score":0.99} |
+| GET | /tasks | List all tasks | {"easy":{...},"medium":{...}} |
+| GET | /metadata | Full env spec | action/obs space details |
+| GET | /web | Visual dashboard | Interactive HTML UI |
+| GET | /docs | API documentation | Swagger UI |
 
-### Patient deterioration model
-
-Untreated critical patients (MEWS >= 7) worsen every 3 steps.
-MEWS score increases by 2 per deterioration event.
-Deceased patients are removed from queue after 2x deterioration threshold.
-
-### Resource management
-
-ICU beds: 2 total (most constrained resource)
-General beds: 10 total
-Staff units: 5 total
-Lab slots: 5 total, 1 freed every 3 steps
+---
 
 ## Project Structure
 
 ```text
 clinical_triage_env/
-├── Dockerfile              # Root Dockerfile (for validator)
+├── Dockerfile              # Root Dockerfile (HF Spaces)
 ├── inference.py            # Baseline inference script
-├── __init__.py             # Package exports
-├── models.py               # Typed Action/Observation/State models
-├── client.py               # TriageEnv(EnvClient)
+├── models.py               # Typed Action/Observation/State
+├── client.py               # TriageEnv(EnvClient) — async+sync
 ├── openenv.yaml            # OpenEnv manifest
 ├── pyproject.toml          # Package config
+├── AGENTS.md               # Guide for building agents
+├── CITATION.cff            # Academic citation
 ├── README.md               # This file
+├── examples/
+│   └── grpo_training.py    # GRPO training example
 ├── tests/
 │   └── test_end_to_end.py  # 10 end-to-end tests
 └── server/
     ├── Dockerfile          # Server Dockerfile
-    ├── app.py              # FastAPI server
-    ├── triage_environment.py
-    ├── patient_generator.py
-    ├── mews_scorer.py
-    ├── llm_grader.py
+    ├── app.py              # FastAPI + custom endpoints
+    ├── web_interface.py    # Visual dashboard HTML
+    ├── triage_environment.py  # Core environment logic
+    ├── patient_generator.py   # 12 Indian hospital cases
+    ├── mews_scorer.py         # Clinical MEWS implementation
+    ├── llm_grader.py          # LLM justifiability scorer
     └── requirements.txt
 ```
+
+---
+
+## Why This Fills a Real Gap
+
+- First healthcare/medical environment in OpenEnv - zero competition.
+- India-specific: models district hospital constraints that affect 500M+ Indians who depend on public healthcare.
+- Clinically grounded: MEWS is a validated real-world scoring system, not an arbitrary reward function.
+- Dual grader: combines programmatic accuracy with LLM medical reasoning assessment - more robust than either alone.

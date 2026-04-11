@@ -97,6 +97,14 @@ async def grade_current_episode():
 	return env.grade_task()
 
 
+@app.get("/grade/{task_name}")
+async def grade_task_by_name(task_name: str):
+	"""Grade the current episode for a specific task difficulty."""
+	result = env.grade_task()
+	result["requested_task"] = task_name
+	return result
+
+
 @app.post("/reset/{task_name}")
 async def reset_with_task(task_name: str, seed: Optional[int] = None):
 	obs = env.reset(task=task_name, seed=seed)

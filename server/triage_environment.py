@@ -447,7 +447,9 @@ class TriageEnvironment(Environment):
 
     def _check_done(self) -> bool:
         """Episode ends when max steps reached or queue is empty."""
-        if self._state.step_count >= self._state.max_steps:
+        task = getattr(self, '_current_task', {})
+        max_steps = task.get('max_steps', MAX_STEPS)
+        if self._state.step_count >= max_steps:
             return True
         if len(self._queue) == 0:
             return True
@@ -500,40 +502,71 @@ class TriageEnvironment(Environment):
     def grade_task(self) -> dict:
         s = self._state
         task = self._current_task
-        total = s.patients_stabilized + s.patients_deteriorated + s.patients_deceased
-        if total == 0:
-            return {"score": 0.0, "success": False, "reason": "No patients treated"}
+        difficulty = task["difficulty"]
 
-        stabilization_rate = s.patients_stabilized / max(total, 1)
-        death_penalty = s.patients_deceased * 0.15
-        overflow_penalty = s.queue_overflow_count * 0.05
+        stabilized = s.patients_stabilized
+        deteriorated = s.patients_deteriorated
+        deceased = s.patients_deceased
+        overflows = s.queue_overflow_count
+        total_treated = stabilized + deteriorated + deceased
+
+        if total_treated == 0:
+            # No patients treated yet — base score on step rewards
+            # from decision_log so grader never returns 0 mid-episode
+            if s.decision_log:
+                avg_step = sum(
+                    e.get("step_reward", 0) for e in s.decision_log
+                ) / len(s.decision_log)
+                score = round(max(0.0, min(1.0, avg_step)), 3)
+            else:
+                score = 0.0
+            return {
+                "task_name": task["name"],
+                "difficulty": difficulty,
+                "score": score,
+                "success": score >= task["success_threshold"],
+                "patients_stabilized": 0,
+                "patients_deteriorated": 0,
+                "patients_deceased": 0,
+                "stabilization_rate": 0.0,
+                "steps_taken": s.step_count,
+                "reason": "Graded on step rewards (no completed treatments yet)",
+            }
+
+        stabilization_rate = stabilized / max(total_treated, 1)
+        death_penalty = deceased * 0.15
+        overflow_penalty = overflows * 0.05
         raw_score = stabilization_rate - death_penalty - overflow_penalty
+
+        # Step reward bonus — reward good decisions even if
+        # not all patients are formally discharged
+        if s.decision_log:
+            avg_step_reward = sum(
+                e.get("step_reward", 0) for e in s.decision_log
+            ) / len(s.decision_log)
+            # Blend: 60% outcome-based + 40% step-reward-based
+            raw_score = 0.6 * raw_score + 0.4 * avg_step_reward
+
         score = round(max(0.0, min(1.0, raw_score)), 3)
 
-        if task["difficulty"] == "easy":
+        if difficulty == "easy":
             success = score >= task["success_threshold"]
-        elif task["difficulty"] == "medium":
-            success = (
-                score >= task["success_threshold"]
-                and s.patients_deceased == 0
-            )
+        elif difficulty == "medium":
+            success = score >= task["success_threshold"] and deceased == 0
         else:  # hard
-            success = (
-                score >= task["success_threshold"]
-                and s.patients_deceased < 2
-            )
+            success = score >= task["success_threshold"] and deceased < 2
 
         return {
             "task_name": task["name"],
-            "difficulty": task["difficulty"],
+            "difficulty": difficulty,
             "score": score,
             "success": success,
-            "patients_stabilized": s.patients_stabilized,
-            "patients_deteriorated": s.patients_deteriorated,
-            "patients_deceased": s.patients_deceased,
+            "patients_stabilized": stabilized,
+            "patients_deteriorated": deteriorated,
+            "patients_deceased": deceased,
             "stabilization_rate": round(stabilization_rate, 3),
             "steps_taken": s.step_count,
-            "reason": f"Stabilized {s.patients_stabilized}/{total} patients",
+            "reason": f"Stabilized {stabilized}/{total_treated} treated patients",
         }
 
     def _build_observation(

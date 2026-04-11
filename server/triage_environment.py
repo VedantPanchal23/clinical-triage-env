@@ -113,6 +113,7 @@ class TriageEnvironment(Environment):
         self._state = TriageState()
         self._queue: list[PatientState] = []
         self._current_task = TASKS["medium"]
+        self._last_info: dict = {}
 
     # ------------------------------------------------------------------
     # OpenEnv API
@@ -151,6 +152,10 @@ class TriageEnvironment(Environment):
             lab_queue_length=0,
         )
         self._queue = generate_initial_queue(initial_queue_size)
+        self._last_info = self._build_info(
+            "RESET",
+            "Episode started. Triage coordinator active.",
+        )
 
         return self._build_observation(
             last_patient_id="RESET",
@@ -184,10 +189,12 @@ class TriageEnvironment(Environment):
         # --- 1. Find patient ---
         patient = self._find_patient(action.patient_id)
         if patient is None:
+            invalid_feedback = f"Patient {action.patient_id} not found in queue."
+            self._last_info = self._build_info(action.patient_id, invalid_feedback)
             return self._build_observation(
                 last_patient_id=action.patient_id,
                 valid=False,
-                feedback=f"Patient {action.patient_id} not found in queue.",
+                feedback=invalid_feedback,
                 step_reward=self._normalize_reward(-0.5),
             )
 
@@ -252,10 +259,13 @@ class TriageEnvironment(Environment):
 
         step_reward = self._normalize_reward(step_reward)
 
+        feedback = " | ".join(feedback_parts)
+        self._last_info = self._build_info(action.patient_id, feedback)
+
         obs = self._build_observation(
             last_patient_id=action.patient_id,
             valid=True,
-            feedback=" | ".join(feedback_parts),
+            feedback=feedback,
             step_reward=step_reward,
         )
         obs.episode_done = done
@@ -266,9 +276,28 @@ class TriageEnvironment(Environment):
         """Return current episode state (RFC 001)."""
         return self._state
 
+    @property
+    def info(self) -> dict:
+        return getattr(self, "_last_info", {})
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _build_info(self, patient_id: str, feedback: str) -> dict:
+        return {
+            "patient_id": patient_id,
+            "feedback": feedback,
+            "mews_available": True,
+            "episode_id": self._state.episode_id,
+            "task": getattr(self, "_current_task", {}).get("name", "unknown"),
+            "resources": {
+                "icu_beds": self._state.icu_beds_available,
+                "general_beds": self._state.general_beds_available,
+                "staff": self._state.staff_units_free,
+                "lab_slots": LAB_SLOTS_TOTAL - self._state.lab_queue_length,
+            },
+        }
 
     def _find_patient(self, patient_id: str) -> Optional[PatientState]:
         for p in self._queue:

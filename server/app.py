@@ -8,7 +8,6 @@ from typing import Optional
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import HTTPException
-from openenv.core.env_server import create_fastapi_app
 from pydantic import ValidationError
 import uvicorn
 from models import TriageAction, TriageObservation
@@ -27,10 +26,27 @@ def _get_done(observation: TriageObservation) -> bool:
 TriageObservation.reward = property(_get_reward)  # type: ignore[attr-defined]
 TriageObservation.done = property(_get_done)  # type: ignore[attr-defined]
 
-app = create_fastapi_app(TriageEnvironment, TriageAction, TriageObservation)
-app.state.max_concurrent_envs = 4
 env = TriageEnvironment()
 env.reset(task="medium")
+
+os.environ["ENABLE_WEB_INTERFACE"] = "true"
+
+try:
+	from openenv.core.env_server import create_web_interface_app
+	try:
+		app = create_web_interface_app(env, TriageAction, TriageObservation)
+	except TypeError:
+		app = create_web_interface_app(TriageEnvironment, TriageAction, TriageObservation)
+	print("Web interface enabled at /web", flush=True)
+except (ImportError, Exception):
+	from openenv.core.env_server import create_fastapi_app
+	try:
+		app = create_fastapi_app(env, TriageAction, TriageObservation)
+	except TypeError:
+		app = create_fastapi_app(TriageEnvironment, TriageAction, TriageObservation)
+	print("Web interface not available, using standard app", flush=True)
+
+app.state.max_concurrent_envs = 4
 
 
 def _is_openenv_simulation_route(route) -> bool:

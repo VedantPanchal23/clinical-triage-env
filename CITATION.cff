@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this environment, please cite it."
+type: software
+title: "Clinical Triage Coordinator"
+abstract: "Multi-agent RL environment for Indian district hospital triage using Modified Early Warning Score (MEWS) as clinical ground truth."
+authors:
+  - family-names: "Panchal"
+    given-names: "Vedant"
+version: 1.3.1
+date-released: 2026-04-12
+url: "https://github.com/VedantPanchal23/clinical-triage-env"
+keywords:
+  - reinforcement-learning
+  - healthcare
+  - triage
+  - openenv
+  - india
+  - multi-agent
+license: MIT

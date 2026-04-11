@@ -154,6 +154,31 @@ HF Space runs on port 7860. Local development can use any port.
 API Base URL: https://vedantpanchal23-clinical-triage-env.hf.space
 Interactive Docs: https://vedantpanchal23-clinical-triage-env.hf.space/docs
 
+## RL Training Integration
+
+This environment is compatible with major RL frameworks:
+
+### TRL (GRPO)
+
+```python
+from trl import GRPOConfig, GRPOTrainer
+# Environment provides step/reset/state compatible with TRL
+# See examples/grpo_training.py for full example
+```
+
+### SkyRL
+
+```python
+# OpenEnv environments work natively with SkyRL
+# pip install skyrl
+```
+
+### Oumi
+
+```python
+# See https://github.com/oumi-ai/oumi for OpenEnv integration
+```
+
 ## API Endpoints
 
 | Method | Endpoint | Description |

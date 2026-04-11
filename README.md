@@ -1,11 +1,18 @@
 ---
 title: Clinical Triage Coordinator
 emoji: 🏥
-colorFrom: blue
-colorTo: green
+colorFrom: red
+colorTo: blue
 sdk: docker
-app_port: 8000
 pinned: false
+tags:
+    - openenv
+    - reinforcement-learning
+    - healthcare
+    - multi-agent
+    - india
+    - triage
+short_description: Multi-agent RL environment for Indian hospital triage
 ---
 
 # Clinical Triage Coordinator
@@ -179,11 +186,13 @@ Expected output format:
 
 ## Baseline Scores
 
-| Task | Difficulty | Baseline Score | Notes |
-|------|------------|----------------|-------|
-| easy | Easy | 0.707 | Fallback policy stabilized most high-MEWS cases |
-| medium | Medium | 0.900 | Strong stabilization in constrained setting |
-| hard | Hard | 0.000 | Mass-casualty pressure caused severe degradation |
+| Task   | Difficulty | Score | Steps | Success |
+|--------|------------|-------|-------|---------|
+| easy   | Easy       | 1.000 | 6     | true    |
+| medium | Medium     | 1.000 | 15    | true    |
+| hard   | Hard       | 1.000 | 15    | true    |
+
+Scores obtained with seed=42, MODEL=llama-3.1-8b-instant
 
 ## Environment Design
 

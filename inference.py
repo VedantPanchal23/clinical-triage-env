@@ -185,7 +185,11 @@ async def run_task(
 
     try:
         # Reset environment with specific task
-        r = await http.post(f"{ENV_URL}/reset/{task_name}", timeout=30.0)
+        r = await http.post(
+            f"{ENV_URL}/reset/{task_name}",
+            params={"seed": 42},
+            timeout=30.0,
+        )
         r.raise_for_status()
         data = r.json()
         obs  = data["observation"]

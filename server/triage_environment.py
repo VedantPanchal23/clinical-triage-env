@@ -68,15 +68,20 @@ TASKS = {
     "hard": {
         "name": "Mass Casualty Incident",
         "description": (
-            "Handle a mass casualty scenario with 20 simultaneous patients "
-            "including multiple critical cases arriving continuously. "
-            "Minimize deaths under maximum resource pressure. "
-            "Succeed with >= 0.5 stabilization rate and < 2 deaths."
+            "Handle a mass casualty scenario with 20 simultaneous "
+            "patients including multiple critical cases arriving "
+            "continuously every step. Strict resource limits: only "
+            "1 ICU bed available. Agents must prioritize correctly "
+            "or patients die. Succeed with >= 0.5 stabilization "
+            "rate and < 2 deaths."
         ),
-        "max_steps": 60,
+        "max_steps": 40,
         "target_patients": 20,
         "success_threshold": 0.5,
         "difficulty": "hard",
+        "icu_beds": 1,
+        "new_patient_prob": 0.6,
+        "deterioration_steps": 1,
     },
 }
 
@@ -114,6 +119,7 @@ class TriageEnvironment(Environment):
         self._queue: list[PatientState] = []
         self._current_task = TASKS["medium"]
         self._last_info: dict = {}
+        self._hard_mode = False
 
     # ------------------------------------------------------------------
     # OpenEnv API
@@ -151,6 +157,14 @@ class TriageEnvironment(Environment):
             staff_units_free=STAFF_UNITS_TOTAL,
             lab_queue_length=0,
         )
+
+        if self._current_task["difficulty"] == "hard":
+            self._state.icu_beds_available = self._current_task.get("icu_beds", 1)
+            self._hard_mode = True
+        else:
+            self._state.icu_beds_available = ICU_BEDS_TOTAL
+            self._hard_mode = False
+
         self._queue = generate_initial_queue(initial_queue_size)
         self._last_info = self._build_info(
             "RESET",
@@ -365,6 +379,13 @@ class TriageEnvironment(Environment):
                 patient.is_deteriorated = True
                 self._state.patients_deteriorated += 1
 
+            if getattr(self, "_hard_mode", False) and patient.mews_score >= 7:
+                if not patient.is_deteriorated:
+                    patient.is_deteriorated = True
+                    self._state.patients_deteriorated += 1
+                reward -= 0.5
+                feedback += " | Hard mode escalation: critical discharge penalized"
+
         return round(reward, 2), feedback
 
     def _apply_resource(
@@ -437,26 +458,44 @@ class TriageEnvironment(Environment):
           - Possibly admit a new patient
           - Free lab slot occasionally
         """
+        deterioration_steps = (
+            self._current_task.get("deterioration_steps", 2)
+            if getattr(self, "_hard_mode", False)
+            else DETERIORATION_STEPS
+        )
+        new_patient_prob = (
+            self._current_task.get("new_patient_prob", 0.6)
+            if getattr(self, "_hard_mode", False)
+            else NEW_PATIENT_PROB
+        )
+
         for patient in self._queue:
             patient.time_in_queue += 1
 
             # Deterioration: untreated critical/emergency patients worsen
             if (
                 patient.true_severity <= 2
-                and patient.assigned_ward is None
                 and patient.time_in_queue > 0
-                and patient.time_in_queue % DETERIORATION_STEPS == 0
+                and patient.time_in_queue % deterioration_steps == 0
             ):
-                patient.is_deteriorated = True
-                self._state.patients_deteriorated += 1
-                # Escalate MEWS slightly to reflect worsening
-                patient.mews_score = min(patient.mews_score + 2, 17)
+                needs_critical_care = patient.assigned_ward is None
+                if getattr(self, "_hard_mode", False):
+                    needs_critical_care = (
+                        needs_critical_care
+                        or patient.assigned_ward != Ward.ICU
+                    )
+
+                if needs_critical_care:
+                    patient.is_deteriorated = True
+                    self._state.patients_deteriorated += 1
+                    # Escalate MEWS slightly to reflect worsening
+                    patient.mews_score = min(patient.mews_score + 2, 17)
 
         # Remove deceased/critically deteriorated patients
         before = len(self._queue)
         self._queue = [
             p for p in self._queue
-            if not (p.is_deteriorated and p.time_in_queue > DETERIORATION_STEPS * 2)
+            if not (p.is_deteriorated and p.time_in_queue > deterioration_steps * 2)
         ]
         deceased = before - len(self._queue)
         self._state.patients_deceased += deceased
@@ -464,7 +503,7 @@ class TriageEnvironment(Environment):
         # New patient arrival
         if (
             len(self._queue) < MAX_QUEUE_SIZE
-            and random.random() < NEW_PATIENT_PROB
+            and random.random() < new_patient_prob
         ):
             new_patient = generate_patient()
             new_patient.patient_id = f"PT-NEW-{self._state.step_count:03d}"
@@ -577,6 +616,16 @@ class TriageEnvironment(Environment):
             raw_score = 0.6 * raw_score + 0.4 * avg_step_reward
 
         score = round(max(0.0, min(1.0, raw_score)), 3)
+
+        if difficulty == "medium" and deceased > 0:
+            score = min(score, 0.5)
+
+        if difficulty == "hard" and s.step_count < task.get("max_steps", MAX_STEPS):
+            progress_factor = max(
+                0.4,
+                s.step_count / max(task.get("max_steps", MAX_STEPS), 1),
+            )
+            score = round(score * progress_factor, 3)
 
         if difficulty == "easy":
             success = score >= task["success_threshold"]

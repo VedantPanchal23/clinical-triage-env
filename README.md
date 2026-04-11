@@ -181,9 +181,9 @@ Expected output format:
 
 | Task | Difficulty | Baseline Score | Notes |
 |------|------------|----------------|-------|
-| easy | Easy | ~0.75 | LLM correctly identifies MEWS critical patients |
-| medium | Medium | ~0.60 | Resource constraints reduce perfect score |
-| hard | Hard | ~0.45 | Mass casualty overwhelms resources |
+| easy | Easy | 0.707 | Fallback policy stabilized most high-MEWS cases |
+| medium | Medium | 0.900 | Strong stabilization in constrained setting |
+| hard | Hard | 0.000 | Mass-casualty pressure caused severe degradation |
 
 ## Environment Design
 

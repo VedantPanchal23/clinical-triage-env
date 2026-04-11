@@ -2,6 +2,7 @@
 
 import os
 import sys
+from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -56,8 +57,8 @@ async def root_redirect():
 
 
 @app.post("/reset")
-async def reset_default_episode():
-	obs = env.reset_default()
+async def reset_default_episode(seed: Optional[int] = None):
+	obs = env.reset(task="medium", seed=seed)
 	return {
 		"observation": obs.model_dump(),
 		"reward": 0.0,
@@ -97,8 +98,8 @@ async def grade_current_episode():
 
 
 @app.post("/reset/{task_name}")
-async def reset_with_task(task_name: str):
-	obs = env.reset(task=task_name)
+async def reset_with_task(task_name: str, seed: Optional[int] = None):
+	obs = env.reset(task=task_name, seed=seed)
 	return {
 		"observation": obs.model_dump(),
 		"reward": 0.0,

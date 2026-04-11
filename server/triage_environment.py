@@ -118,8 +118,12 @@ class TriageEnvironment(Environment):
     # OpenEnv API
     # ------------------------------------------------------------------
 
-    def reset(self, task: str = "default") -> TriageObservation:
+    def reset(self, task: str = "medium", seed: Optional[int] = None) -> TriageObservation:
         """Start a new episode with a fresh patient queue."""
+        if seed is not None:
+            import random
+            random.seed(seed)
+
         task_config = TASKS.get(task)
         if task_config is None:
             # Backward-compatible default used by legacy clients and tests.

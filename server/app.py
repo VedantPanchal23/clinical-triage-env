@@ -9,9 +9,11 @@ from uuid import uuid4
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import HTTPException, Request, Response
+from fastapi.responses import HTMLResponse
 from pydantic import ValidationError
 import uvicorn
 from models import TriageAction, TriageObservation
+from server.web_interface import get_dashboard_html
 from server.triage_environment import TASKS, TriageEnvironment
 
 
@@ -125,6 +127,8 @@ app.state.max_concurrent_envs = MAX_CONCURRENT_ENVS
 def _is_openenv_simulation_route(route) -> bool:
 	path = getattr(route, "path", "")
 	methods = getattr(route, "methods", set())
+	if path == "/":
+		return True
 	if path == "/reset" and "POST" in methods:
 		return True
 	if path == "/step" and "POST" in methods:
@@ -134,6 +138,8 @@ def _is_openenv_simulation_route(route) -> bool:
 	if path == "/metadata" and "GET" in methods:
 		return True
 	if path == "/mcp" and "POST" in methods:
+		return True
+	if path == "/web" or path.startswith("/web/"):
 		return True
 	return False
 
@@ -157,6 +163,7 @@ async def root():
 			"state": "GET /state",
 			"grade": "POST /grade",
 			"tasks": "GET /tasks",
+			"web_ui": "GET /web - Interactive visual dashboard",
 			"docs": "GET /docs",
 			"health": "GET /health",
 		},
@@ -164,6 +171,16 @@ async def root():
 		"live_demo": "https://vedantpanchal23-clinical-triage-env.hf.space/docs",
 		"github": "https://github.com/VedantPanchal23/clinical-triage-env",
 	}
+
+
+@app.get("/web", response_class=HTMLResponse)
+async def web_dashboard():
+	return get_dashboard_html()
+
+
+@app.get("/web/", response_class=HTMLResponse)
+async def web_dashboard_slash():
+	return get_dashboard_html()
 
 
 @app.get("/metadata")

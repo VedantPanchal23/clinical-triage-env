@@ -4,10 +4,11 @@
 import os
 import sys
 from typing import Optional
+from uuid import uuid4
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request, Response
 from pydantic import ValidationError
 import uvicorn
 from models import TriageAction, TriageObservation
@@ -26,27 +27,99 @@ def _get_done(observation: TriageObservation) -> bool:
 TriageObservation.reward = property(_get_reward)  # type: ignore[attr-defined]
 TriageObservation.done = property(_get_done)  # type: ignore[attr-defined]
 
-env = TriageEnvironment()
-env.reset(task="medium")
+
+MAX_CONCURRENT_ENVS = 4
+SESSION_COOKIE_NAME = "triage_session_id"
+
+def make_env():
+	"""Factory - creates a fresh TriageEnvironment per session."""
+	return TriageEnvironment()
+
+
+_fallback_env = TriageEnvironment()
+_fallback_env.reset(task="medium")
+_sessions: dict[str, TriageEnvironment] = {"default": _fallback_env}
+
+
+def _active_session_count() -> int:
+	return max(0, len(_sessions) - 1)
+
+
+def _resolve_session_id(request: Request) -> str:
+	return (
+		request.headers.get("X-Session-ID")
+		or request.query_params.get("session_id")
+		or request.cookies.get(SESSION_COOKIE_NAME)
+		or "default"
+	)
+
+
+def _attach_session_cookie(response: Response, session_id: str) -> None:
+	response.set_cookie(
+		key=SESSION_COOKIE_NAME,
+		value=session_id,
+		httponly=True,
+		samesite="lax",
+	)
+
+
+def _get_or_create_session_env(session_id: str) -> TriageEnvironment:
+	env = _sessions.get(session_id)
+	if env is not None:
+		return env
+
+	if _active_session_count() >= MAX_CONCURRENT_ENVS:
+		raise HTTPException(
+			status_code=429,
+			detail=(
+				f"Maximum concurrent sessions reached ({MAX_CONCURRENT_ENVS}). "
+				"Reuse an existing session_id or wait for a session to end."
+			),
+		)
+
+	env = make_env()
+	_sessions[session_id] = env
+	return env
+
+
+def get_env(request: Request) -> tuple[str, TriageEnvironment]:
+	session_id = _resolve_session_id(request)
+	env = _sessions.get(session_id)
+	if env is None:
+		raise HTTPException(
+			status_code=404,
+			detail="Unknown session_id. Call /reset first to create a session.",
+		)
+	return session_id, env
+
 
 os.environ["ENABLE_WEB_INTERFACE"] = "true"
 
 try:
-	from openenv.core.env_server import create_web_interface_app
-	try:
-		app = create_web_interface_app(env, TriageAction, TriageObservation)
-	except TypeError:
-		app = create_web_interface_app(TriageEnvironment, TriageAction, TriageObservation)
-	print("Web interface enabled at /web", flush=True)
-except (ImportError, Exception):
-	from openenv.core.env_server import create_fastapi_app
-	try:
-		app = create_fastapi_app(env, TriageAction, TriageObservation)
-	except TypeError:
-		app = create_fastapi_app(TriageEnvironment, TriageAction, TriageObservation)
-	print("Web interface not available, using standard app", flush=True)
+    from openenv.core.env_server import create_web_interface_app
+    try:
+        app = create_web_interface_app(make_env, TriageAction, TriageObservation)
+        print("Web interface enabled at /web (session factory)", flush=True)
+    except TypeError:
+        from openenv.core.env_server import create_fastapi_app
 
-app.state.max_concurrent_envs = 4
+        try:
+            app = create_fastapi_app(make_env, TriageAction, TriageObservation)
+            print("Session-isolated env factory registered", flush=True)
+        except TypeError:
+            app = create_fastapi_app(_fallback_env, TriageAction, TriageObservation)
+            print("Single env instance (factory not supported)", flush=True)
+except (ImportError, Exception):
+    from openenv.core.env_server import create_fastapi_app
+
+    try:
+        app = create_fastapi_app(make_env, TriageAction, TriageObservation)
+        print("Session-isolated env factory registered", flush=True)
+    except TypeError:
+        app = create_fastapi_app(_fallback_env, TriageAction, TriageObservation)
+        print("Single env instance (factory not supported)", flush=True)
+
+app.state.max_concurrent_envs = MAX_CONCURRENT_ENVS
 
 
 def _is_openenv_simulation_route(route) -> bool:
@@ -155,44 +228,56 @@ async def get_metadata():
 
 
 @app.post("/reset")
-async def reset_default_episode(seed: Optional[int] = None):
+async def reset_default_episode(request: Request, response: Response, seed: Optional[int] = None):
+	requested_session_id = request.headers.get("X-Session-ID") or request.query_params.get("session_id")
+	session_id = requested_session_id or str(uuid4())
+	env = _get_or_create_session_env(session_id)
 	obs = env.reset(task="medium", seed=seed)
+	_attach_session_cookie(response, session_id)
 	return {
 		"observation": obs.model_dump(),
 		"reward": 0.0,
 		"done": False,
+		"session_id": session_id,
 	}
 
 
 @app.post("/step")
-async def step_episode(payload: dict):
+async def step_episode(request: Request, response: Response, payload: dict):
 	action_payload = payload.get("action", payload)
 	try:
 		action = TriageAction.model_validate(action_payload)
 	except ValidationError as exc:
 		raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
+	session_id, env = get_env(request)
 	obs = env.step(action)
+	_attach_session_cookie(response, session_id)
 	return {
 		"observation": obs.model_dump(),
 		"reward": obs.step_reward,
 		"done": obs.episode_done,
 		"info": env.info,
+		"session_id": session_id,
 	}
 
 
 @app.get("/capacity")
 async def get_capacity():
 	return {
-		"max_concurrent_envs": 4,
-		"current_sessions": 1,
+		"max_concurrent_envs": MAX_CONCURRENT_ENVS,
+		"current_sessions": _active_session_count(),
 		"status": "available",
 	}
 
 
 @app.get("/state")
-async def get_state():
-	return env.state.to_dict()
+async def get_state(request: Request, response: Response):
+	session_id, env = get_env(request)
+	state = env.state.to_dict()
+	state["session_id"] = session_id
+	_attach_session_cookie(response, session_id)
+	return state
 
 
 @app.get("/tasks")
@@ -201,33 +286,44 @@ async def list_tasks():
 
 
 @app.post("/grade")
-async def grade_current_episode():
+async def grade_current_episode(request: Request, response: Response):
+	session_id, env = get_env(request)
 	result = env.grade_task()
 	# Ensure score is strictly between 0 and 1.
 	if "score" in result:
 		result["score"] = round(max(0.01, min(0.99, float(result["score"]))), 4)
+	result["session_id"] = session_id
+	_attach_session_cookie(response, session_id)
 	return result
 
 
 @app.get("/grade/{task_name}")
-async def grade_task_by_name(task_name: str):
+async def grade_task_by_name(task_name: str, request: Request, response: Response):
 	"""Grade the current episode for a specific task difficulty."""
+	session_id, env = get_env(request)
 	result = env.grade_task()
 	# Ensure score is strictly between 0 and 1.
 	if "score" in result:
 		result["score"] = round(max(0.01, min(0.99, float(result["score"]))), 4)
 	result["requested_task"] = task_name
+	result["session_id"] = session_id
+	_attach_session_cookie(response, session_id)
 	return result
 
 
 @app.post("/reset/{task_name}")
-async def reset_with_task(task_name: str, seed: Optional[int] = None):
+async def reset_with_task(task_name: str, request: Request, response: Response, seed: Optional[int] = None):
+	requested_session_id = request.headers.get("X-Session-ID") or request.query_params.get("session_id")
+	session_id = requested_session_id or str(uuid4())
+	env = _get_or_create_session_env(session_id)
 	obs = env.reset(task=task_name, seed=seed)
+	_attach_session_cookie(response, session_id)
 	return {
 		"observation": obs.model_dump(),
 		"reward": 0.0,
 		"done": False,
 		"task": env._current_task,
+		"session_id": session_id,
 	}
 
 
